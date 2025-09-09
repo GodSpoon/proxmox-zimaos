@@ -1,10 +1,36 @@
 #!/bin/bash
 
 # github.com/R0GGER/proxmox-zimaos
-# bash -c "$(wget -qLO - https://raw.githubusercontent.com/R0GGER/proxmox-zimaos/refs/heads/main/zimaos_zimacube.sh)"
+# bash -c "$(wget -qLO - https://raw.githubusercontent.com/godspoon/proxmox-zimaos/refs/heads/main/zimaos_zimacube.sh)"
 
-# ZimaOS version
-VERSION="1.4.3"
+# GitHub release page
+GITHUB_RELEASES_URL="https://github.com/IceWhaleTech/ZimaOS/releases"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Fetch the latest version
+echo -e "${YELLOW}Fetching the latest ZimaOS release version...${NC}"
+LATEST=$(curl -sSL "$GITHUB_RELEASES_URL" | grep -Eo '## [0-9]+\.[0-9]+\.[0-9]+' | head -n1 | awk '{print $2}')
+
+if [[ -z "$LATEST" ]]; then
+    echo -e "${RED}Error: Could not fetch the latest version.${NC}"
+    exit 1
+fi
+
+# Ask user for version
+echo -e "${GREEN}Latest available ZimaOS version: $LATEST${NC}"
+read -p "Enter ZimaOS version to use [default: $LATEST]: " VERSION
+VERSION=${VERSION:-$LATEST}
+
+# Validate version format
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${RED}Error: Invalid version format.${NC}"
+    exit 1
+fi
 
 # Variables
 URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/$VERSION"
@@ -12,11 +38,6 @@ IMAGE="zimaos_zimacube-$VERSION.img.xz"
 EXTRACTED_IMAGE="zimaos_zimacube-$VERSION.img"
 IMAGE_PATH="/var/lib/vz/images/$IMAGE"
 EXTRACTED_PATH="/var/lib/vz/images/$EXTRACTED_IMAGE"
-
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
 
 validate_number() {
     if ! [[ $1 =~ ^[0-9]+$ ]]; then
@@ -75,7 +96,7 @@ fi
 
 echo -e "\n${GREEN}Starting VM creation process...${NC}"
 
-# Remove any old zimaos image files
+# Cleanup
 echo "Cleaning up any existing image files..."
 rm -f "/var/lib/vz/images/"zimaos_zimacube*.img "/var/lib/vz/images/"zimaos_zimacube*.img.xz
 
@@ -83,23 +104,23 @@ rm -f "/var/lib/vz/images/"zimaos_zimacube*.img "/var/lib/vz/images/"zimaos_zima
 echo "Downloading the image..."
 wget -q --show-progress -O "$IMAGE_PATH" "$URL/$IMAGE"
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to download the image."
-  exit 1
+    echo "Error: Failed to download the image."
+    exit 1
 fi
 
 # Extract the image
 echo "Extracting the image..."
 xz -df "$IMAGE_PATH"
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to extract the image."
-  rm -f "$IMAGE_PATH" # Cleanup if extraction fails
-  exit 1
+    echo "Error: Failed to extract the image."
+    rm -f "$IMAGE_PATH"
+    exit 1
 fi
 
 # Verify extracted image exists
 if [ ! -f "$EXTRACTED_PATH" ]; then
-  echo "Error: Extracted image file not found at $EXTRACTED_PATH"
-  exit 1
+    echo "Error: Extracted image file not found at $EXTRACTED_PATH"
+    exit 1
 fi
 
 # Create VM
@@ -109,12 +130,10 @@ qm create $VMID --name $VM_NAME --memory $MEMORY --cores $CORES -localtime 1 -bi
 # Create EFI disk
 echo "Creating EFI disk..."
 if [[ "$VOLUME" == "local" ]]; then
-    # Directory-based storage
     mkdir -p "/var/lib/vz/images/$VMID"
     qemu-img create -f raw "/var/lib/vz/images/$VMID/vm-$VMID-disk-0.raw" 4M
     qm set $VMID -efidisk0 $VOLUME:$VMID/vm-$VMID-disk-0.raw,efitype=4m
 else
-    # Block storage (like local-lvm)
     pvesm alloc $VOLUME $VMID vm-$VMID-disk-0 4M
     qm set $VMID -efidisk0 $VOLUME:vm-$VMID-disk-0,efitype=4m
 fi
@@ -123,7 +142,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Import the disk
+# Import disk
 echo "Importing the disk..."
 qm importdisk $VMID "$EXTRACTED_PATH" $VOLUME
 if [ $? -ne 0 ]; then
@@ -131,13 +150,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Attach the disk
+# Attach disk
 echo "Attaching the disk..."
 if [[ "$VOLUME" == "local" ]]; then
-    # Directory-based storage
     qm set $VMID --sata0 $VOLUME:$VMID/vm-$VMID-disk-1.raw --boot c --scsihw virtio-scsi-pci --boot order=sata0
 else
-    # Block storage (like local-lvm)
     qm set $VMID --sata0 $VOLUME:vm-$VMID-disk-1 --boot c --scsihw virtio-scsi-pci --boot order=sata0
 fi
 if [ $? -ne 0 ]; then
@@ -149,8 +166,8 @@ fi
 echo "Resize ZimaOS disk"
 qm resize $VMID sata0 +8G
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to resize the disk."
-  exit 1
+    echo "Error: Failed to resize the disk."
+    exit 1
 fi
 
 # Start VM
