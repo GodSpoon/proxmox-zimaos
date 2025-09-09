@@ -29,17 +29,13 @@ echo -e "${GREEN}Latest available ZimaOS version: $LATEST${NC}"
 read -p "Enter ZimaOS version to use [default: $LATEST]: " VERSION
 VERSION=${VERSION:-$LATEST}
 
-# Validate version format (strip leading 'v' if present)
-VERSION=${VERSION#v}
-if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo -e "${RED}Error: Invalid version format.${NC}"
-    exit 1
-fi
+# Strip leading "v" only for filenames
+VERSION_STRIPPED=${VERSION#v}
 
 # Variables
-URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/v$VERSION"
-IMAGE="zimaos_zimacube-$VERSION.img.xz"
-EXTRACTED_IMAGE="zimaos_zimacube-$VERSION.img"
+URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/$VERSION"
+IMAGE="zimaos_zimacube-$VERSION_STRIPPED.img.xz"
+EXTRACTED_IMAGE="zimaos_zimacube-$VERSION_STRIPPED.img"
 IMAGE_PATH="/var/lib/vz/images/$IMAGE"
 EXTRACTED_PATH="/var/lib/vz/images/$EXTRACTED_IMAGE"
 
