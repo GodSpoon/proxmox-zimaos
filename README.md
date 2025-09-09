@@ -14,7 +14,7 @@ Automatic installation takes less than 2 minutes, while manual installation take
 Install ZimaOS in just 3 minutes. Simply run the command below on your Proxmox node, answer the VM creation prompts, and let the script handle the rest!
 
 ```
-bash -c "$(wget -qLO - https://raw.githubusercontent.com/R0GGER/proxmox-zimaos/refs/heads/main/zimaos_zimacube.sh)"
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/godspoon/proxmox-zimaos/refs/heads/main/zimaos_zimacube.sh)"
 ```
 
 https://github.com/user-attachments/assets/5502b6ae-d213-4fc8-a7a5-677225c59b6e
