@@ -3,8 +3,11 @@
 # github.com/R0GGER/proxmox-zimaos
 # bash -c "$(wget -qLO - https://raw.githubusercontent.com/godspoon/proxmox-zimaos/refs/heads/main/zimaos_zimacube.sh)"
 
-# GitHub release page
-GITHUB_RELEASES_URL="https://github.com/IceWhaleTech/ZimaOS/releases"
+# Install jq if not already present
+if ! command -v jq &> /dev/null; then
+    echo "jq not found, installing..."
+    apt update && apt install jq -y
+fi
 
 # Colors
 GREEN='\033[0;32m'
@@ -14,9 +17,9 @@ NC='\033[0m' # No Color
 
 # Fetch the latest version
 echo -e "${YELLOW}Fetching the latest ZimaOS release version...${NC}"
-LATEST=$(curl -sSL "$GITHUB_RELEASES_URL" | grep -Eo '## [0-9]+\.[0-9]+\.[0-9]+' | head -n1 | awk '{print $2}')
+LATEST=$(curl -s https://api.github.com/repos/IceWhaleTech/ZimaOS/releases/latest | jq -r .tag_name)
 
-if [[ -z "$LATEST" ]]; then
+if [[ -z "$LATEST" || "$LATEST" == "null" ]]; then
     echo -e "${RED}Error: Could not fetch the latest version.${NC}"
     exit 1
 fi
@@ -26,14 +29,15 @@ echo -e "${GREEN}Latest available ZimaOS version: $LATEST${NC}"
 read -p "Enter ZimaOS version to use [default: $LATEST]: " VERSION
 VERSION=${VERSION:-$LATEST}
 
-# Validate version format
+# Validate version format (strip leading 'v' if present)
+VERSION=${VERSION#v}
 if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo -e "${RED}Error: Invalid version format.${NC}"
     exit 1
 fi
 
 # Variables
-URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/$VERSION"
+URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/v$VERSION"
 IMAGE="zimaos_zimacube-$VERSION.img.xz"
 EXTRACTED_IMAGE="zimaos_zimacube-$VERSION.img"
 IMAGE_PATH="/var/lib/vz/images/$IMAGE"
