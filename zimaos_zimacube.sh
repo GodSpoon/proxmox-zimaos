@@ -3,23 +3,23 @@
 # github.com/R0GGER/proxmox-zimaos
 # bash -c "$(wget -qLO - https://raw.githubusercontent.com/godspoon/proxmox-zimaos/refs/heads/main/zimaos_zimacube.sh)"
 
-# Install jq if not already present
-if ! command -v jq &> /dev/null; then
-    echo "jq not found, installing..."
-    apt update && apt install jq -y
-fi
-
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Install jq if missing
+if ! command -v jq &>/dev/null; then
+    echo -e "${YELLOW}Installing jq...${NC}"
+    apt update && apt install jq -y
+fi
+
 # Fetch the latest version
 echo -e "${YELLOW}Fetching the latest ZimaOS release version...${NC}"
 LATEST=$(curl -s https://api.github.com/repos/IceWhaleTech/ZimaOS/releases/latest | jq -r .tag_name)
 
-if [[ -z "$LATEST" || "$LATEST" == "null" ]]; then
+if [[ -z "$LATEST" ]]; then
     echo -e "${RED}Error: Could not fetch the latest version.${NC}"
     exit 1
 fi
@@ -29,22 +29,20 @@ echo -e "${GREEN}Latest available ZimaOS version: $LATEST${NC}"
 read -p "Enter ZimaOS version to use [default: $LATEST]: " VERSION
 VERSION=${VERSION:-$LATEST}
 
-# Strip leading "v" for filenames if present
-VERSION_STRIPPED=${VERSION#v}
-
-# Dynamically fetch asset name from GitHub API
+# Get installer asset (img or img.xz only, ignore .raucb)
 ASSET=$(curl -s https://api.github.com/repos/IceWhaleTech/ZimaOS/releases/tags/$VERSION \
-  | jq -r '.assets[]?.name' | grep "zimacube-$VERSION_STRIPPED" | head -n1)
+    | jq -r '.assets[]?.name' \
+    | grep -E "installer.*\.(img|img\.xz)$" \
+    | head -n1)
 
-if [[ -z "$ASSET" || "$ASSET" == "null" ]]; then
-    echo -e "${RED}Error: Could not find a matching release asset for $VERSION.${NC}"
+if [[ -z "$ASSET" ]]; then
+    echo -e "${RED}Error: Could not find a valid installer image for version $VERSION.${NC}"
     exit 1
 fi
 
-# Variables
 URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/$VERSION/$ASSET"
 IMAGE="$ASSET"
-EXTRACTED_IMAGE="${ASSET%.xz}" # remove .xz if present
+EXTRACTED_IMAGE="${ASSET%.xz}"
 IMAGE_PATH="/var/lib/vz/images/$IMAGE"
 EXTRACTED_PATH="/var/lib/vz/images/$EXTRACTED_IMAGE"
 
@@ -126,14 +124,11 @@ if [[ "$IMAGE" == *.xz ]]; then
         rm -f "$IMAGE_PATH"
         exit 1
     fi
-    FINAL_IMAGE="$EXTRACTED_PATH"
-else
-    FINAL_IMAGE="$IMAGE_PATH"
 fi
 
-# Verify final image exists
-if [ ! -f "$FINAL_IMAGE" ]; then
-    echo "Error: Image file not found at $FINAL_IMAGE"
+# Verify extracted image exists
+if [ ! -f "$EXTRACTED_PATH" ]; then
+    echo "Error: Extracted image file not found at $EXTRACTED_PATH"
     exit 1
 fi
 
@@ -158,7 +153,7 @@ fi
 
 # Import disk
 echo "Importing the disk..."
-qm importdisk $VMID "$FINAL_IMAGE" $VOLUME
+qm importdisk $VMID "$EXTRACTED_PATH" $VOLUME
 if [ $? -ne 0 ]; then
     echo "Error: Failed to import the disk."
     exit 1
