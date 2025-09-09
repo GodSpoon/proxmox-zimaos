@@ -29,13 +29,22 @@ echo -e "${GREEN}Latest available ZimaOS version: $LATEST${NC}"
 read -p "Enter ZimaOS version to use [default: $LATEST]: " VERSION
 VERSION=${VERSION:-$LATEST}
 
-# Strip leading "v" only for filenames
+# Strip leading "v" for filenames if present
 VERSION_STRIPPED=${VERSION#v}
 
+# Dynamically fetch asset name from GitHub API
+ASSET=$(curl -s https://api.github.com/repos/IceWhaleTech/ZimaOS/releases/tags/$VERSION \
+  | jq -r '.assets[]?.name' | grep "zimacube-$VERSION_STRIPPED" | head -n1)
+
+if [[ -z "$ASSET" || "$ASSET" == "null" ]]; then
+    echo -e "${RED}Error: Could not find a matching release asset for $VERSION.${NC}"
+    exit 1
+fi
+
 # Variables
-URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/$VERSION"
-IMAGE="zimaos_zimacube-$VERSION_STRIPPED.img.xz"
-EXTRACTED_IMAGE="zimaos_zimacube-$VERSION_STRIPPED.img"
+URL="https://github.com/IceWhaleTech/ZimaOS/releases/download/$VERSION/$ASSET"
+IMAGE="$ASSET"
+EXTRACTED_IMAGE="${ASSET%.xz}" # remove .xz if present
 IMAGE_PATH="/var/lib/vz/images/$IMAGE"
 EXTRACTED_PATH="/var/lib/vz/images/$EXTRACTED_IMAGE"
 
@@ -102,24 +111,29 @@ rm -f "/var/lib/vz/images/"zimaos_zimacube*.img "/var/lib/vz/images/"zimaos_zima
 
 # Download the image
 echo "Downloading the image..."
-wget -q --show-progress -O "$IMAGE_PATH" "$URL/$IMAGE"
+wget -q --show-progress -O "$IMAGE_PATH" "$URL"
 if [ $? -ne 0 ]; then
     echo "Error: Failed to download the image."
     exit 1
 fi
 
-# Extract the image
-echo "Extracting the image..."
-xz -df "$IMAGE_PATH"
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to extract the image."
-    rm -f "$IMAGE_PATH"
-    exit 1
+# Extract the image if compressed
+if [[ "$IMAGE" == *.xz ]]; then
+    echo "Extracting the image..."
+    xz -df "$IMAGE_PATH"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to extract the image."
+        rm -f "$IMAGE_PATH"
+        exit 1
+    fi
+    FINAL_IMAGE="$EXTRACTED_PATH"
+else
+    FINAL_IMAGE="$IMAGE_PATH"
 fi
 
-# Verify extracted image exists
-if [ ! -f "$EXTRACTED_PATH" ]; then
-    echo "Error: Extracted image file not found at $EXTRACTED_PATH"
+# Verify final image exists
+if [ ! -f "$FINAL_IMAGE" ]; then
+    echo "Error: Image file not found at $FINAL_IMAGE"
     exit 1
 fi
 
@@ -144,7 +158,7 @@ fi
 
 # Import disk
 echo "Importing the disk..."
-qm importdisk $VMID "$EXTRACTED_PATH" $VOLUME
+qm importdisk $VMID "$FINAL_IMAGE" $VOLUME
 if [ $? -ne 0 ]; then
     echo "Error: Failed to import the disk."
     exit 1
